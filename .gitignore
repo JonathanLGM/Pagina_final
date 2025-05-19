@@ -1,0 +1,19 @@
+# Dependencias de Node
+node_modules/
+
+# Archivos de entorno (contienen secretos)
+.env
+.env.*
+!.env.example
+
+# Archivos de sistema operativo (opcional pero recomendado)
+.DS_Store
+Thumbs.db
+
+# Logs (opcional pero recomendado)
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos de configuración del editor (opcional)
+# .vscode/
