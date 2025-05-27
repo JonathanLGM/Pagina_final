@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestión de Asignaciones</title> 
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding-top: 20px; }
+        .container { max-width: 960px; }
+        #mensajeFormularioAsignacion, #mensajeTablaAsignacion { margin-top: 15px; }
+        .table th, .table td { vertical-align: middle; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+    </style>
+</head>
+<body class="bg-dark text-white">
+
+    <script>
+        (function() {
+            const token = localStorage.getItem('tokenColegio');
+            if (!token) {
+                console.log('No hay token, redirigiendo a login desde asignacion.html');
+                window.location.href = 'login.html';
+            }
+        })();
+    </script>
+
+    <div class="container py-4">
+        <h1 class="text-center mb-4">Asignación de Materias a Profesores</h1>
+
+        <form id="formAsignacion" class="bg-secondary p-4 rounded mb-5 shadow-lg">
+            <h4 class="mb-3 text-white">Registrar Nueva Asignación</h4>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="id_materia_asignar" class="form-label">Materia</label>
+                    <select id="id_materia_asignar" class="form-select form-select-sm" required>
+                        <option value="">Seleccione una materia...</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label for="documento_pro_asignar" class="form-label">Profesor</label>
+                    <select id="documento_pro_asignar" class="form-select form-select-sm" required>
+                        <option value="">Seleccione un profesor...</option>
+                    </select>
+                </div>
+                <div class="col-md-12">
+                    <label for="fecha_asignacion_registrar" class="form-label">Fecha de Asignación</label>
+                    <input type="date" id="fecha_asignacion_registrar" class="form-control form-control-sm" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-danger mt-3">Registrar Asignación</button>
+            <div id="mensajeFormularioAsignacion" class="mt-2"></div>
+        </form>
+
+        <h4 class="mb-3">Listado de Asignaciones</h4>
+        <button onclick="listarAsignaciones()" class="btn btn-outline-light mb-3 btn-sm">Actualizar Lista</button>
+        <div class="table-responsive">
+            <table class="table table-dark table-striped table-bordered table-hover">
+                <thead>
+                    <tr>
+                        <th>ID Asig.</th>
+                        <th>ID Materia</th>
+                        <th>Doc. Profesor</th>
+                        <th>Fecha Asignación</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaAsignaciones">
+                </tbody>
+            </table>
+        </div>
+        <div id="mensajeTablaAsignacion" class="mt-2"></div>
+
+        <a href="principal.html" class="btn btn-secondary mt-4 btn-sm">Volver al Menú Principal</a>
+    </div>
+
+    <script>
+        const mensajeFormularioDiv = document.getElementById('mensajeFormularioAsignacion');
+        const mensajeTablaDiv = document.getElementById('mensajeTablaAsignacion');
+        const selectMateria = document.getElementById('id_materia_asignar');
+        const selectProfesor = document.getElementById('documento_pro_asignar');
+
+        function mostrarMensaje(elementoDiv, mensaje, tipo = 'danger') {
+            if (!elementoDiv) { return; }
+            elementoDiv.innerHTML = `<div class="alert alert-${tipo} alert-dismissible fade show" role="alert">
+                                        ${mensaje}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                     </div>`;
+            if (tipo === 'success') {
+                setTimeout(() => {
+                    const alertElement = elementoDiv.querySelector('.alert');
+                    if (alertElement && bootstrap.Alert.getOrCreateInstance(alertElement)) {
+                        bootstrap.Alert.getOrCreateInstance(alertElement).close();
+                    }
+                }, 3000);
+            }
+        }
+
+        function manejarErrorAuth(respuesta) {
+            if (respuesta.status === 401 || respuesta.status === 403) {
+                alert('Tu sesión ha expirado. Serás redirigido al login.');
+                localStorage.removeItem('tokenColegio'); localStorage.removeItem('usuarioColegio');
+                window.location.href = 'login.html'; return true;
+            } return false;
+        }
+
+        async function cargarMateriasSelect() {
+            const token = localStorage.getItem('tokenColegio');
+            if (!token || !selectMateria) return;
+            try {
+                const respuesta = await fetch("http://localhost:3000/api/materias/listar", { headers: { "Authorization": `Bearer ${token}` } });
+                if (manejarErrorAuth(respuesta)) return; if (!respuesta.ok) throw new Error('Error al cargar materias.');
+                const data = await respuesta.json();
+                selectMateria.innerHTML = '<option value="">Seleccione una materia...</option>';
+                if (data.resultado && data.resultado.length > 0) {
+                    data.resultado.forEach(materia => {
+                        selectMateria.innerHTML += `<option value="${materia.id_materia}">${materia.nombre} (ID: ${materia.id_materia})</option>`;
+                    });
+                } else { selectMateria.innerHTML += '<option value="" disabled>No hay materias</option>'; }
+            } catch (error) { console.error("Error cargando materias en select:", error); selectMateria.innerHTML = `<option value="">Error al cargar</option>`; }
+        }
+
+        async function cargarProfesoresSelect() {
+            const token = localStorage.getItem('tokenColegio');
+            if (!token || !selectProfesor) return;
+            try {
+                const respuesta = await fetch("http://localhost:3000/api/profesores/listar", { headers: { "Authorization": `Bearer ${token}` } });
+                if (manejarErrorAuth(respuesta)) return; if (!respuesta.ok) throw new Error('Error al cargar profesores.');
+                const data = await respuesta.json();
+                selectProfesor.innerHTML = '<option value="">Seleccione un profesor...</option>';
+                if (data.resultado && data.resultado.length > 0) {
+                    data.resultado.forEach(prof => {
+                        selectProfesor.innerHTML += `<option value="${prof.documento_pro}">${prof.nombre} ${prof.apellido} (Doc: ${prof.documento_pro})</option>`;
+                    });
+                } else { selectProfesor.innerHTML += '<option value="" disabled>No hay profesores</option>'; }
+            } catch (error) { console.error("Error cargando profesores en select:", error); selectProfesor.innerHTML = `<option value="">Error al cargar</option>`; }
+        }
+
+        const formAsignacion = document.getElementById("formAsignacion");
+        if (formAsignacion) {
+            formAsignacion.addEventListener("submit", async function (e) {
+                e.preventDefault();
+                mensajeFormularioDiv.innerHTML = '';
+                const token = localStorage.getItem('tokenColegio');
+                if (!token) { mostrarMensaje(mensajeFormularioDiv, 'No has iniciado sesión.', 'warning'); setTimeout(() => window.location.href = 'login.html', 2000); return; }
+
+                const nuevaAsignacion = {
+                    id_materia: selectMateria.value,
+                    documento_pro: selectProfesor.value,
+                    fecha_asignacion: document.getElementById("fecha_asignacion_registrar").value
+                };
+
+                if (!nuevaAsignacion.id_materia || !nuevaAsignacion.documento_pro || !nuevaAsignacion.fecha_asignacion) {
+                    mostrarMensaje(mensajeFormularioDiv, 'Todos los campos son obligatorios.', 'warning'); return;
+                }
+
+                try {
+                    const respuesta = await fetch("http://localhost:3000/api/asignaciones/registrar", {
+                        method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                        body: JSON.stringify(nuevaAsignacion)
+                    });
+                    const data = await respuesta.json();
+                    if (manejarErrorAuth(respuesta)) return;
+                    if (!respuesta.ok) {
+                        const msjError = (data.resultado && data.resultado.erroresValidacion) ? data.resultado.erroresValidacion.split('|').join('<br>') : (data.mensaje || 'Error desconocido.');
+                        throw new Error(msjError);
+                    }
+                    mostrarMensaje(mensajeFormularioDiv, data.mensaje || "Asignación registrada.", 'success');
+                    listarAsignaciones();
+                    e.target.reset(); selectMateria.value = ""; selectProfesor.value = "";
+                } catch (error) { console.error('Error registrando asignación:', error); mostrarMensaje(mensajeFormularioDiv, `Error: ${error.message}`, 'danger'); }
+            });
+        }
+
+        async function listarAsignaciones() {
+            mensajeTablaDiv.innerHTML = '';
+            const token = localStorage.getItem('tokenColegio');
+            if (!token) { mostrarMensaje(mensajeTablaDiv, 'No hay token.', 'warning'); return; }
+            const tabla = document.getElementById("tablaAsignaciones");
+            tabla.innerHTML = '<tr><td colspan="5" class="text-center">Cargando...</td></tr>';
+
+            try {
+                const respuesta = await fetch("http://localhost:3000/api/asignaciones/listar", { headers: { "Authorization": `Bearer ${token}` } });
+                if (manejarErrorAuth(respuesta)) return;
+                const contentType = respuesta.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    const textError = await respuesta.text(); throw new Error(`Respuesta no JSON: ${textError.substring(0, 100)}...`);
+                }
+                const data = await respuesta.json();
+                if (!respuesta.ok) throw new Error(data.mensaje || 'Error al listar asignaciones.');
+
+                tabla.innerHTML = "";
+                if (data.resultado && data.resultado.length > 0) {
+                    data.resultado.forEach(asig => {
+                        // ***** CONSOLE.LOG PARA DEPURAR EL OBJETO 'asig' *****
+                        console.log("Datos de la asignación para el enlace (desde /api/asignaciones/listar):", asig);
+
+                        const idDeEstaAsignacion = asig.id; // PK de la tabla Asignacion
+                        const documentoDelProfesor = asig.documento_pro; // Documento del profesor en esta asignacion
+                        const idMateriaMostrado = asig.id_materia || 'N/D'; // Para mostrar en la tabla
+
+                        // Verificar si las variables tienen valor antes de crear el enlace
+                        if (idDeEstaAsignacion === undefined || documentoDelProfesor === undefined) {
+                            console.error("¡ATENCIÓN! 'asig.id' o 'asig.documento_pro' es undefined. El enlace a editar será incorrecto.", asig);
+                        }
+                        
+                        tabla.innerHTML += `
+                            <tr>
+                                <td>${idDeEstaAsignacion || 'N/A'}</td>
+                                <td>${idMateriaMostrado}</td>
+                                <td>${documentoDelProfesor || 'N/A'}</td>
+                                <td>${asig.fecha_asignacion || 'N/A'}</td>
+                                <td>
+                                    <a href="editar-asignacion.html?id_asignacion=${idDeEstaAsignacion}&documento_pro=${documentoDelProfesor}" class="btn btn-warning btn-sm me-1">Editar</a>
+                                    <button class="btn btn-danger btn-sm" onclick="confirmarEliminarAsignacion('${idDeEstaAsignacion}')">Eliminar</button>
+                                </td>
+                            </tr>`;
+                    });
+                } else {
+                    tabla.innerHTML = '<tr><td colspan="5" class="text-center">No hay asignaciones registradas.</td></tr>';
+                }
+            } catch (error) {
+                console.error('Error al listar asignaciones:', error);
+                tabla.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error: ${error.message}</td></tr>`;
+                mostrarMensaje(mensajeTablaDiv, `Error: ${error.message}`, 'danger');
+            }
+        }
+
+        async function confirmarEliminarAsignacion(id_asignacion) {
+            if (!confirm(`¿Seguro que deseas eliminar la asignación con ID ${id_asignacion}?`)) return;
+            mensajeTablaDiv.innerHTML = '';
+            const token = localStorage.getItem('tokenColegio');
+            if (!token) { mostrarMensaje(mensajeTablaDiv, 'No has iniciado sesión.', 'warning'); return; }
+            try {
+                const respuesta = await fetch(`http://localhost:3000/api/asignaciones/eliminar/${id_asignacion}`, {
+                    method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (manejarErrorAuth(respuesta)) return;
+                const data = await respuesta.json(); 
+                if (!respuesta.ok) throw new Error(data.mensaje || 'Error al eliminar.');
+                mostrarMensaje(mensajeTablaDiv, data.mensaje || 'Eliminada.', 'success');
+                listarAsignaciones();
+            } catch (error) { console.error('Error al eliminar asignación:', error); mostrarMensaje(mensajeTablaDiv, `Error: ${error.message}`, 'danger'); }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (localStorage.getItem('tokenColegio')) {
+                 cargarMateriasSelect();
+                 cargarProfesoresSelect();
+                 listarAsignaciones();
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

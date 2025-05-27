@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestión de Inscripciones</title> 
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding-top: 20px; }
+        .container { max-width: 960px; }
+        #mensajeFormularioInscripcion, #mensajeTablaInscripcion { margin-top: 15px; }
+        .table th, .table td { vertical-align: middle; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+    </style>
+</head>
+<body class="bg-dark text-white">
+
+    <script>
+        (function() {
+            const token = localStorage.getItem('tokenColegio');
+            if (!token) {
+                console.log('No hay token, redirigiendo a login desde inscripcion.html');
+                window.location.href = 'login.html';
+            }
+        })();
+    </script>
+
+    <div class="container py-4">
+        <h1 class="text-center mb-4">Inscripción de Estudiantes a Materias</h1>
+
+        <form id="formInscripcion" class="bg-secondary p-4 rounded mb-5 shadow-lg">
+            <h4 class="mb-3 text-white">Registrar Nueva Inscripción</h4>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="id_materia_inscribir" class="form-label">Materia</label>
+                    <select id="id_materia_inscribir" class="form-select form-select-sm" required>
+                        <option value="">Seleccione una materia...</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label for="documento_est_inscribir" class="form-label">Estudiante</label>
+                    <select id="documento_est_inscribir" class="form-select form-select-sm" required>
+                        <option value="">Seleccione un estudiante...</option>
+                    </select>
+                </div>
+                <div class="col-md-12">
+                    <label for="fecha_inscripcion_registrar" class="form-label">Fecha de Inscripción</label>
+                    <input type="date" id="fecha_inscripcion_registrar" class="form-control form-control-sm" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-danger mt-3">Registrar Inscripción</button>
+            <div id="mensajeFormularioInscripcion" class="mt-2"></div>
+        </form>
+
+        <h4 class="mb-3">Listado de Inscripciones</h4>
+        <button onclick="listarInscripciones()" class="btn btn-outline-light mb-3 btn-sm">Actualizar Lista</button>
+        <div class="table-responsive">
+            <table class="table table-dark table-striped table-bordered table-hover">
+                <thead>
+                    <tr>
+                        <th>ID Insc.</th>
+                        <th>ID Materia</th>
+                        <th>Doc. Estudiante</th>
+                        <th>Fecha Inscripción</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaInscripciones">
+                </tbody>
+            </table>
+        </div>
+        <div id="mensajeTablaInscripcion" class="mt-2"></div>
+
+        <a href="principal.html" class="btn btn-secondary mt-4 btn-sm">Volver al Menú Principal</a>
+    </div>
+
+    <script>
+        const mensajeFormularioDiv = document.getElementById('mensajeFormularioInscripcion');
+        const mensajeTablaDiv = document.getElementById('mensajeTablaInscripcion');
+        const selectMateria = document.getElementById('id_materia_inscribir');
+        const selectEstudiante = document.getElementById('documento_est_inscribir');
+
+        function mostrarMensaje(elementoDiv, mensaje, tipo = 'danger') {
+            if (!elementoDiv) { return; }
+            elementoDiv.innerHTML = `<div class="alert alert-${tipo} alert-dismissible fade show" role="alert">
+                                        ${mensaje}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                     </div>`;
+            if (tipo === 'success') {
+                setTimeout(() => {
+                    const alertElement = elementoDiv.querySelector('.alert');
+                    if (alertElement && bootstrap.Alert.getOrCreateInstance(alertElement)) {
+                        bootstrap.Alert.getOrCreateInstance(alertElement).close();
+                    }
+                }, 3000);
+            }
+        }
+
+        function manejarErrorAuth(respuesta) {
+            if (respuesta.status === 401 || respuesta.status === 403) {
+                alert('Tu sesión ha expirado. Serás redirigido al login.');
+                localStorage.removeItem('tokenColegio'); localStorage.removeItem('usuarioColegio');
+                window.location.href = 'login.html'; return true;
+            } return false;
+        }
+
+        async function cargarMateriasSelect() {
+            const token = localStorage.getItem('tokenColegio');
+            if (!token || !selectMateria) return;
+            try {
+                const respuesta = await fetch("http://localhost:3000/api/materias/listar", { headers: { "Authorization": `Bearer ${token}` } });
+                if (manejarErrorAuth(respuesta)) return; if (!respuesta.ok) throw new Error('Error al cargar materias.');
+                const data = await respuesta.json();
+                selectMateria.innerHTML = '<option value="">Seleccione una materia...</option>';
+                if (data.resultado && data.resultado.length > 0) {
+                    data.resultado.forEach(materia => {
+                        selectMateria.innerHTML += `<option value="${materia.id_materia}">${materia.nombre} (ID: ${materia.id_materia})</option>`;
+                    });
+                } else { selectMateria.innerHTML += '<option value="" disabled>No hay materias</option>'; }
+            } catch (error) { console.error("Error cargando materias en select:", error); selectMateria.innerHTML = `<option value="">Error al cargar</option>`; }
+        }
+
+        async function cargarEstudiantesSelect() {
+            const token = localStorage.getItem('tokenColegio');
+            if (!token || !selectEstudiante) return;
+            try {
+                const respuesta = await fetch("http://localhost:3000/api/estudiantes/listar", { headers: { "Authorization": `Bearer ${token}` } });
+                if (manejarErrorAuth(respuesta)) return; if (!respuesta.ok) throw new Error('Error al cargar estudiantes.');
+                const data = await respuesta.json();
+                selectEstudiante.innerHTML = '<option value="">Seleccione un estudiante...</option>';
+                if (data.resultado && data.resultado.length > 0) {
+                    data.resultado.forEach(est => {
+                        selectEstudiante.innerHTML += `<option value="${est.documento_est}">${est.nombre} ${est.apellido} (Doc: ${est.documento_est})</option>`;
+                    });
+                } else { selectEstudiante.innerHTML += '<option value="" disabled>No hay estudiantes</option>'; }
+            } catch (error) { console.error("Error cargando estudiantes en select:", error); selectEstudiante.innerHTML = `<option value="">Error al cargar</option>`; }
+        }
+
+        const formInscripcion = document.getElementById("formInscripcion");
+        if (formInscripcion) {
+            formInscripcion.addEventListener("submit", async function (e) {
+                e.preventDefault();
+                mensajeFormularioDiv.innerHTML = '';
+                const token = localStorage.getItem('tokenColegio');
+                if (!token) { mostrarMensaje(mensajeFormularioDiv, 'No has iniciado sesión.', 'warning'); setTimeout(() => window.location.href = 'login.html', 2000); return; }
+
+                const nuevaInscripcion = {
+                    id_materia: selectMateria.value,
+                    documento_est: selectEstudiante.value,
+                    fecha: document.getElementById("fecha_inscripcion_registrar").value
+                };
+
+                if (!nuevaInscripcion.id_materia || !nuevaInscripcion.documento_est || !nuevaInscripcion.fecha) {
+                    mostrarMensaje(mensajeFormularioDiv, 'Todos los campos son obligatorios.', 'warning'); return;
+                }
+
+                try {
+                    const respuesta = await fetch("http://localhost:3000/api/inscripciones/registrar", {
+                        method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                        body: JSON.stringify(nuevaInscripcion)
+                    });
+                    const data = await respuesta.json();
+                    if (manejarErrorAuth(respuesta)) return;
+                    if (!respuesta.ok) {
+                        const msjError = (data.resultado && data.resultado.erroresValidacion) ? data.resultado.erroresValidacion.split('|').join('<br>') : (data.mensaje || 'Error desconocido.');
+                        throw new Error(msjError);
+                    }
+                    mostrarMensaje(mensajeFormularioDiv, data.mensaje || "Inscripción registrada.", 'success');
+                    listarInscripciones();
+                    e.target.reset(); selectMateria.value = ""; selectEstudiante.value = "";
+                } catch (error) { console.error('Error registrando inscripción:', error); mostrarMensaje(mensajeFormularioDiv, `Error: ${error.message}`, 'danger'); }
+            });
+        }
+
+        async function listarInscripciones() {
+            mensajeTablaDiv.innerHTML = '';
+            const token = localStorage.getItem('tokenColegio');
+            if (!token) { mostrarMensaje(mensajeTablaDiv, 'No hay token.', 'warning'); return; }
+            const tabla = document.getElementById("tablaInscripciones");
+            tabla.innerHTML = '<tr><td colspan="5" class="text-center">Cargando...</td></tr>';
+
+            try {
+                const respuesta = await fetch("http://localhost:3000/api/inscripciones/listar", { headers: { "Authorization": `Bearer ${token}` } });
+                if (manejarErrorAuth(respuesta)) return;
+                const contentType = respuesta.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    const textError = await respuesta.text(); throw new Error(`Respuesta no JSON: ${textError.substring(0, 100)}...`);
+                }
+                const data = await respuesta.json();
+                if (!respuesta.ok) throw new Error(data.mensaje || 'Error al listar inscripciones.');
+
+                tabla.innerHTML = "";
+                if (data.resultado && data.resultado.length > 0) {
+                    data.resultado.forEach(insc => {
+                        console.log("Datos de la inscripción para el enlace (desde /api/inscripciones/listar):", insc);
+
+                        const idDeEstaInscripcion = insc.id; // PK de la tabla Inscripcion
+                        const documentoDelEstudiante = insc.documento_est; // Documento del estudiante en esta inscripcion
+                        const idMateriaMostrado = insc.id_materia || 'N/D'; // Para mostrar en la tabla
+
+                        if (idDeEstaInscripcion === undefined || documentoDelEstudiante === undefined) {
+                            console.error("¡ATENCIÓN! 'insc.id' o 'insc.documento_est' es undefined. El enlace a editar será incorrecto.", insc);
+                        }
+                        
+                        tabla.innerHTML += `
+                            <tr>
+                                <td>${idDeEstaInscripcion || 'N/A'}</td>
+                                <td>${idMateriaMostrado}</td>
+                                <td>${documentoDelEstudiante || 'N/A'}</td>
+                                <td>${insc.fecha || 'N/A'}</td>
+                                <td>
+                                    <a href="editar-inscripcion.html?id_inscripcion=${idDeEstaInscripcion}&documento_est=${documentoDelEstudiante}" class="btn btn-warning btn-sm me-1">Editar</a>
+                                    <button class="btn btn-danger btn-sm" onclick="confirmarEliminarInscripcion('${idDeEstaInscripcion}')">Eliminar</button>
+                                </td>
+                            </tr>`;
+                    });
+                } else {
+                    tabla.innerHTML = '<tr><td colspan="5" class="text-center">No hay inscripciones registradas.</td></tr>';
+                }
+            } catch (error) {
+                console.error('Error al listar inscripciones:', error);
+                tabla.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error: ${error.message}</td></tr>`;
+                mostrarMensaje(mensajeTablaDiv, `Error: ${error.message}`, 'danger');
+            }
+        }
+
+        async function confirmarEliminarInscripcion(id_inscripcion) {
+            if (!confirm(`¿Seguro que deseas eliminar la inscripción con ID ${id_inscripcion}?`)) return;
+            mensajeTablaDiv.innerHTML = '';
+            const token = localStorage.getItem('tokenColegio');
+            if (!token) { mostrarMensaje(mensajeTablaDiv, 'No has iniciado sesión.', 'warning'); return; }
+            try {
+                const respuesta = await fetch(`http://localhost:3000/api/inscripciones/eliminar/${id_inscripcion}`, {
+                    method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (manejarErrorAuth(respuesta)) return;
+                const data = await respuesta.json(); 
+                if (!respuesta.ok) throw new Error(data.mensaje || 'Error al eliminar.');
+                mostrarMensaje(mensajeTablaDiv, data.mensaje || 'Eliminada.', 'success');
+                listarInscripciones();
+            } catch (error) { console.error('Error al eliminar inscripción:', error); mostrarMensaje(mensajeTablaDiv, `Error: ${error.message}`, 'danger'); }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (localStorage.getItem('tokenColegio')) {
+                 cargarMateriasSelect();
+                 cargarEstudiantesSelect();
+                 listarInscripciones();
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

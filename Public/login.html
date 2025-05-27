@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Colegio Lucifer</title>
-    <!-- Bootstrap 5 CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -15,70 +14,152 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-
         .login-container {
-            background-color: #111;
+            background-color: #1a1a1a;
             padding: 40px;
             border-radius: 15px;
-            box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+            box-shadow: 0 0 25px rgba(220, 53, 69, 0.6);
             width: 100%;
-            max-width: 400px;
+            max-width: 420px;
         }
-
         .form-control {
-            background-color: #222;
+            background-color: #333;
             color: #fff;
-            border: 1px solid #444;
+            border: 1px solid #555;
+            border-radius: 8px;
         }
-
         .form-control:focus {
+            background-color: #444;
             border-color: #dc3545;
-            box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+            box-shadow: 0 0 8px rgba(220, 53, 69, 0.35);
         }
-
         .btn-danger {
             background-color: #dc3545;
-            border: none;
+            border-color: #c82333;
+            font-weight: bold;
+            border-radius: 8px;
+            padding: 10px 0;
         }
-
-        .btn-danger:hover {
+        .btn-danger:hover, .btn-danger:focus {
             background-color: #c82333;
+            border-color: #b21f2b;
+            box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
+        }
+        .alert-custom-error {
+            background-color: #5c1a22;
+            color: #f8d7da;
+            border: 1px solid #c82333;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+        .app-title {
+            color: #dc3545;
+            margin-bottom: 10px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(220, 53, 69, 0.7);
         }
     </style>
 </head>
 
 <body>
     <div class="login-container">
-        <h2 class="text-center mb-4">Ingreso al sistema</h2>
+        <h1 class="text-center app-title">Colegio Lucifer</h1>
+        <h2 class="text-center mb-4">Ingreso al Sistema</h2>
         <form id="loginForm">
             <div class="mb-3">
-                <label for="usuario" class="form-label">Usuario</label>
-                <input type="text" class="form-control" id="usuario" required>
+                <label for="loginInput" class="form-label">Usuario o Correo</label>
+                <input type="text" class="form-control" id="loginInput" value="testuser123" required> <!-- Puse un valor por defecto para prueba -->
             </div>
             <div class="mb-3">
                 <label for="clave" class="form-label">Contraseña</label>
-                <input type="password" class="form-control" id="clave" required>
+                <input type="password" class="form-control" id="clave" value="TestPassword123" required> <!-- Puse un valor por defecto para prueba -->
             </div>
             <button type="submit" class="btn btn-danger w-100">Ingresar</button>
         </form>
+        <div id="mensajeError" class="mt-3" role="alert">
+        </div>
     </div>
 
-    <!-- Bootstrap JS (opcional) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.getElementById('loginForm').addEventListener('submit', function (e) {
+        function verificarSesionExistente() {
+            const token = localStorage.getItem('tokenColegio');
+            if (token) {
+                console.log('Token encontrado, redirigiendo a principal.html');
+                window.location.href = 'principal.html';
+            }
+        }
+        verificarSesionExistente();
+
+        const loginForm = document.getElementById('loginForm');
+        const mensajeErrorDiv = document.getElementById('mensajeError');
+
+        loginForm.addEventListener('submit', async function (e) {
             e.preventDefault();
-            const usuario = document.getElementById('usuario').value;
+            mensajeErrorDiv.innerHTML = '';
+
+            const loginValue = document.getElementById('loginInput').value.trim();
             const clave = document.getElementById('clave').value;
 
-            // Aquí se puede conectar al backend para validar
-            console.log('Login enviado:', usuario, clave);
-            alert('Bienvenido, ' + usuario);
-            // Redirigir a página principal después de login exitoso
-            // window.location.href = "principal.html";
+            if (!loginValue || !clave) {
+                mostrarError('Por favor, ingrese usuario/correo y contraseña.');
+                return;
+            }
+
+            try {
+                const respuesta = await fetch('http://localhost:3000/api/auth/login', { // <-- URL COMPLETA DEL BACKEND
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        login: loginValue,
+                        clave: clave
+                    })
+                });
+
+                const contentType = respuesta.headers.get("content-type");
+                let data;
+
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    data = await respuesta.json();
+                } else {
+                    const textData = await respuesta.text();
+                    console.error("Respuesta del servidor no es JSON:", respuesta.status, textData);
+                    if (!respuesta.ok) {
+                         throw new Error(textData || `Error del servidor: ${respuesta.status}`);
+                    }
+                    data = { mensaje: "Respuesta inesperada del servidor (no JSON).", _raw: textData };
+                }
+
+                if (!respuesta.ok) {
+                    const mensaje = data.mensaje || data.errores || `Error al iniciar sesión: ${respuesta.status}`;
+                    throw new Error(mensaje);
+                }
+
+                console.log('Login exitoso:', data);
+                localStorage.setItem('tokenColegio', data.token);
+                if (data.usuario) {
+                    localStorage.setItem('usuarioColegio', JSON.stringify(data.usuario));
+                }
+                window.location.href = 'principal.html';
+
+            } catch (error) {
+                console.error('Error en el proceso de login:', error);
+                if (error.message.includes('Failed to fetch')) {
+                     mostrarError('No se pudo conectar al servidor. Verifica que el backend esté corriendo en http://localhost:3000.');
+                } else {
+                     mostrarError(error.message);
+                }
+            }
         });
+
+        function mostrarError(mensaje) {
+            mensajeErrorDiv.innerHTML = `<div class="alert alert-custom-error" role="alert">${mensaje}</div>`;
+        }
     </script>
 </body>
-
 </html>
